@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import TracksMenu from "../ui/TracksMenu.tsx";
 import SubtitleTrack from "../ui/SubtitleTrack.tsx";
+import {useNavigate} from "react-router-dom";
 //import TracksMenu from "../ui/TracksMenu.tsx";
 
 
@@ -32,6 +33,7 @@ const PlayerContainer: React.FC = () => {
     //const {itemId} = useParams<{ itemId: string }>();
     const itemId = "f54832154fa58b94202253d463762174"
     const {item} = useMediaItem(itemId);
+    const navigate = useNavigate();
 
 
     const videoRef = useRef<VideoElementWithHls>(null);
@@ -50,6 +52,7 @@ const PlayerContainer: React.FC = () => {
         volume: 0,
         isLoading: true,
         tracksMenuOpen: false,
+        lastReported: 0,
     });
     const [videoState, setVideoState] = useState<VideoState>({
         audioTracks: [],
@@ -60,17 +63,25 @@ const PlayerContainer: React.FC = () => {
     });
 
     const restoreTimeAndPlay = React.useCallback(() => {
-        if (!videoState.hasRestoredPosition && item != null && videoRef.current) {
-            if (item.UserData?.PlaybackPositionTicks) {
-                videoRef.current.currentTime = Math.floor(item.UserData.PlaybackPositionTicks / 10000000);
+        if (!item) return;
+        if (!videoRef.current) return;
+
+        //videoRef.current.currentTime = 20;
+        if (!videoState.hasRestoredPosition) {
+            if (Object.prototype.hasOwnProperty.call(item.UserData, 'PlaybackPositionTicks')) {
+                if (item.UserData.PlaybackPositionTicks != undefined) {
+                    videoRef.current.currentTime = Math.floor(item.UserData.PlaybackPositionTicks / 10000000);
+                }
+
             }
 
             setVideoState(prev => ({
                 ...prev,
                 hasRestoredPosition: true
             }));
+            videoRef.current.play();
         }
-    }, [item, videoState.hasRestoredPosition]);
+    }, [item]);
     const handleUserInput = () => {
         setPlayerState(prev => ({
             ...prev,
@@ -93,7 +104,8 @@ const PlayerContainer: React.FC = () => {
         }
 
     };
-    const toggleFullscreen = () => {}
+    const toggleFullscreen = () => {
+    }
     const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!videoRef.current) return;
 
@@ -116,7 +128,7 @@ const PlayerContainer: React.FC = () => {
     }, [playerState.isPlaying]);
 
     /** TEMP **/
-    const updateAudioTrack = ( id: number) => {
+    const updateAudioTrack = (id: number) => {
         setVideoState(prev => ({
             ...prev,
             selectedAudioTrack: id
@@ -139,7 +151,6 @@ const PlayerContainer: React.FC = () => {
         if (api == null || item == null) return
         const videoElement: VideoElementWithHls | null = videoRef.current;
         if (videoElement == null) return;
-        console.log(item);
 
         cleanUpVideoElement(videoElement);
         SetupVideoPlayer(videoElement, restoreTimeAndPlay, hlsRef)
@@ -252,18 +263,11 @@ const PlayerContainer: React.FC = () => {
 
         const supportDirectPlay = isSupportedCodecVideo(item);
 
-
-        console.log(videoState.subtitleTracks);
-        console.log(videoState.selectedSubtitleIndex);
-
-
-        if(playerState.currentTime != -1 && item.UserData?.PlaybackPositionTicks) {
+        if (playerState.currentTime != -1 && item.UserData?.PlaybackPositionTicks) {
             videoRef.current.currentTime = Math.floor(item.UserData.PlaybackPositionTicks / 10000000);
-            console.log(videoRef.current.currentTime)
         } else {
             videoRef.current.currentTime = 0;
         }
-
 
         const playbackUrl = api.getPlaybackUrl(
             item.Id,
@@ -274,14 +278,69 @@ const PlayerContainer: React.FC = () => {
             undefined
         )
 
+        const playSessionId = `${api["deviceId"]}-${Date.now()}`;
+
+        let resumeTime = 0;
+        if (item.UserData.PlaybackPositionTicks) {
+            resumeTime = Math.floor(item.UserData.PlaybackPositionTicks / 10000000);
+        }
+
+        api.reportPlaying?.({
+            itemId: item.Id,
+            mediaSourceId: item.Id,
+            playSessionId,
+            audioStreamIndex: videoState.selectedAudioTrack,
+            subtitleStreamIndex: videoState.selectedSubtitleIndex ?? 0,
+            positionTicks: Math.floor((resumeTime || 0) * 10000000),
+            volumeLevel: 100,
+            isMuted: false,
+            isPaused: false,
+            repeatMode: "RepeatNone",
+            shuffleMode: "Sorted",
+            maxStreamingBitrate: 140000000,
+            playbackStartTimeTicks: Date.now() * 10000,
+            playbackRate: 1,
+            secondarySubtitleStreamIndex: -1,
+            bufferedRanges: [],
+            playMethod: supportDirectPlay ? "DirectPlay" : "Transcode",
+            nowPlayingQueue: [{Id: item.Id, PlaylistItemId: "playlistItem0"}],
+            canSeek: true,
+        });
+
 
         if (hlsRef.current) {
             hlsRef.current.loadSource(playbackUrl)
-        } else {videoRef.current.src = playbackUrl;}
+        } else {
+            videoRef.current.src = playbackUrl;
+        }
 
-        videoRef.current.play();
+        //videoRef.current.play();
 
     }, [item, api, videoState.selectedAudioTrack, videoState.subtitleTracks, videoState.selectedSubtitleIndex]);
+
+
+    useEffect(() => {
+        if (!api || !item) return
+        if (!playerState.isPlaying) return;
+
+        const position = Math.floor(playerState.currentTime)
+        if (position !== playerState.lastReported && (position % 2 === 0 || position === Math.floor(playerState.duration))) {
+            setPlayerState(prev => ({
+                ...prev,
+                lastReported: position
+            }));
+
+            api.reportPlaybackProgress(
+                item.Id,
+                position,
+                videoState.selectedAudioTrack,
+                (videoState.selectedSubtitleIndex ?? 0)
+            )
+
+        }
+
+
+    }, [api, item, playerState.isPlaying, playerState.currentTime, playerState.lastReported, playerState.duration, videoState.selectedAudioTrack, videoState.selectedSubtitleIndex]);
 
 
     return (
@@ -330,7 +389,6 @@ const PlayerContainer: React.FC = () => {
                 </div>
 
 
-
                 <div className="absolute bottom-0 left-0 right-0 p-4 space-y-2 z-20">
                     {/* Progress bar */}
                     <div className="flex items-center gap-2">
@@ -364,13 +422,13 @@ const PlayerContainer: React.FC = () => {
                             </button>
                             {
                                 playerState.isLoading ? (
-                                    <Loader2 size={22} className="animate-spin" />
+                                    <Loader2 size={22} className="animate-spin"/>
                                 ) : (
                                     <button
                                         onClick={togglePlay}
                                         className="text-white hover:text-gray-300 transition-colors"
                                     >
-                                        {playerState.isPlaying ? <Pause size={22} /> : <Play size={22} />}
+                                        {playerState.isPlaying ? <Pause size={22}/> : <Play size={22}/>}
                                     </button>
                                 )
                             }
@@ -428,7 +486,8 @@ const PlayerContainer: React.FC = () => {
                                 setIsOpen={setTrackOpen}
                                 maxRes={1080}
                                 selectedRes={undefined}
-                                setResolution={() => {}}
+                                setResolution={() => {
+                                }}
                             />
 
                             <button

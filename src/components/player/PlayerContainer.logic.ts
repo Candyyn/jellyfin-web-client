@@ -17,6 +17,7 @@ export interface PlayerState {
     showControls: boolean;
     tracksMenuOpen: boolean;
     isLoading: boolean;
+    lastReported: number;
 }
 
 export interface AudioTracks {
@@ -153,7 +154,7 @@ export function isSupportedCodecVideo(item: MediaItem): boolean {
     const video = document.createElement('video');
     const result = video.canPlayType(mime);
     video.remove();
-    console.log('Supports directplay, ', result === 'probably' || result === 'maybe');
+    //console.log('Supports directplay, ', result === 'probably' || result === 'maybe');
     return result === 'probably' || result === 'maybe';
 }
 
@@ -163,3 +164,7 @@ export const formatTime = (seconds: number) => {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 };
+
+export const handleBack = () => {
+    navigate(-1);
+}
