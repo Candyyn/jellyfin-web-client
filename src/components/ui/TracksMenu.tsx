@@ -51,8 +51,7 @@ const TracksMenu: React.FC<TracksMenuProps> = ({
     if (audioTracks.length <= 1 && subtitleTracks.length === 0) return null;
 
 
-    {/* Bitrate options */
-    }
+    {/* Bitrate options */}
 
     type ResolutionOption = {
         name: string;
@@ -90,7 +89,7 @@ const TracksMenu: React.FC<TracksMenuProps> = ({
                 title="Tracks"
             >
         <span className="flex items-center gap-1">
-          <Captions size={24}/>
+          <Settings size={24}/>
         </span>
             </button>
             {isOpen && (

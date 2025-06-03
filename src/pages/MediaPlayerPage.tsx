@@ -157,6 +157,7 @@ const MediaPlayerPage: React.FC = () => {
         let hls: Hls | null = null;
         if (!api || !item) return;
 
+
         const videoEl = videoRef.current;
         if (!videoEl) return;
 
