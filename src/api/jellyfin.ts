@@ -484,10 +484,8 @@ class JellyfinApi {
             params.set("TranscodeReasons", "ContainerNotSupported, AudioCodecNotSupported");
         }
 
-
         if (selectedSubtitleIndex !== null && subtitles.length > 0) {
             const selectedSubtitle = subtitles.find(s => s.Index === selectedSubtitleIndex);
-
             if (selectedSubtitle && !selectedSubtitle.IsTextSubtitleStream) {
                 params.set("SubtitleStreamIndex", selectedSubtitleIndex.toString());
                 params.set("SubtitleMethod", "Encode");
@@ -500,8 +498,6 @@ class JellyfinApi {
                 params.set("TranscodeReasons", updatedReasons);
             }
         }
-
-
         return `${this.serverUrl}/videos/${itemId}/main.m3u8?${params.toString()}`;
     }
 

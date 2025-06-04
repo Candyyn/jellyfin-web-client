@@ -14,6 +14,7 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import FavouritesPage from "./pages/FavouritesPage";
 import { RecoilRoot } from "recoil";
 import MediaDetailsDrawer from "./components/ui/MediaDetailsDrawer";
+import TestPage from "./pages/TestPage.tsx";
 
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -144,6 +145,8 @@ const App: React.FC = () => {
         />
 
         <Route path="/add-server" element={<AddServerPage />} />
+
+        <Route path="test" element={<TestPage />} />
 
         <Route
           path="/home"
