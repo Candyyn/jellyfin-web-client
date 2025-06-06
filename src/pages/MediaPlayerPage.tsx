@@ -106,10 +106,11 @@ const MediaPlayerPage: React.FC = () => {
   }
 
   function getMaxRes() {
-    if (!api || !item) return;
+    if (!api || !item || !item.MediaStreams) return;
+
 
     const video =
-        item.MediaSources[0].MediaStreams.filter(
+        item.MediaStreams.filter(
             (stream) => stream.Type === "Video"
         ) ?? []; // fallback to empty array if undefined
     return video[0].Height;
@@ -160,7 +161,7 @@ const MediaPlayerPage: React.FC = () => {
     const sources = item?.MediaStreams;
     const videoSrc = sources?.filter(x => x.Type == "Video");
     if (videoSrc == undefined) {
-      setDirectPlay(false);
+      //setDirectPlay(false);
       return;
     }
     const mime = buildCodecString(videoSrc[0]);
@@ -172,7 +173,7 @@ const MediaPlayerPage: React.FC = () => {
     const video = document.createElement('video');
     const result = video.canPlayType(mime);
     video.remove();
-    setDirectPlay(result === 'probably' || result === 'maybe');
+    //setDirectPlay(result === 'probably' || result === 'maybe');
     console.log('Direct play, ', result === 'probably' || result === 'maybe')
   }
 
