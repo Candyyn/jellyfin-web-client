@@ -14,6 +14,9 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import FavouritesPage from "./pages/FavouritesPage";
 import { RecoilRoot } from "recoil";
 import MediaDetailsDrawer from "./components/ui/MediaDetailsDrawer";
+import StudioDetailsPage from "./pages/StudioDetailsPage";
+import CollectionsPage from "./pages/CollectionsPage";
+import ProfilePage from "./components/ProfilePage";
 import TestPage from "./pages/TestPage.tsx";
 
 // Protected route component
@@ -100,6 +103,24 @@ const App: React.FC = () => {
         />
 
         <Route
+          path="/collections"
+          element={
+            <ProtectedRoute>
+              <CollectionsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/latest"
           element={
             <ProtectedRoute>
@@ -118,7 +139,7 @@ const App: React.FC = () => {
         />
 
         <Route
-          path="/person/:personId"
+          path="/person"
           element={
             <ProtectedRoute>
               <PersonDetailsPage />
@@ -153,6 +174,15 @@ const App: React.FC = () => {
           element={
             <ProtectedRoute>
               <HomePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/studio"
+          element={
+            <ProtectedRoute>
+              <StudioDetailsPage />
             </ProtectedRoute>
           }
         />

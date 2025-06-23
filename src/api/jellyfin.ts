@@ -296,20 +296,17 @@ class JellyfinApi {
         );
     }
 
-    async getMediaItem(itemId: string): Promise<MediaItem | null> {
-        if(itemId === "string")  {
-            return new Promise(() => null);
-        }
-        return this.makeRequest<MediaItem>(
-            "get",
-            `/Users/${this.userId}/Items/${itemId}`,
-            undefined,
-            {
-                Fields:
-                    "Overview,Genres,PrimaryImageTag,BackdropImageTags,MediaStreams,RemoteTrailers",
-            }
-        );
-    }
+  async getMediaItem(itemId: string): Promise<MediaItem> {
+    return this.makeRequest<MediaItem>(
+      "get",
+      `/Users/${this.userId}/Items/${itemId}`,
+      undefined,
+      {
+        Fields:
+          "Overview,Genres,PrimaryImageTag,BackdropImageTags,MediaStreams,RemoteTrailers,Chapters",
+      }
+    );
+  }
 
     async getMediaByGenre(
         genreId: string,
@@ -369,7 +366,6 @@ class JellyfinApi {
         if (queryString) {
             url += `?${queryString}`;
         }
-
         return url;
     }
 
@@ -431,9 +427,9 @@ class JellyfinApi {
         itemId: string,
         audioStreamIndex: number = 0,
         subtitles: MediaStream[],
-        selectedSubtitleIndex: number | null,
+        selectedSubtitleIndex: number | string | null,
         directPlay: boolean,
-        bitrate?: number
+        bitrate?: undefined
     ): string {
         const resolution = bitrate ? this.getBitrateFromResolution(bitrate) : undefined;
         const defaultVideoBitrate = "139616000";
@@ -808,6 +804,260 @@ class JellyfinApi {
         enableTotalRecordCount: false,
         enableImages: false,
       }
+    );
+  }
+
+  /**
+   * Get a list of all studios for the current user.
+   * Returns an ItemsResponse with studios.
+   * @param limit Number of studios to fetch (optional)
+   */
+  async getStudios(limit: number = 100): Promise<ItemsResponse> {
+    if (!this.userId) throw new Error("User not authenticated");
+    return this.makeRequest<ItemsResponse>(
+      "get",
+      `/Studios`,
+      undefined,
+      {
+        userId: this.userId,
+        limit,
+        recursive: true,
+        sortBy: "SortName",
+      }
+    );
+  }
+
+  /**
+   * Get a studio by name for the current user.
+   * Returns an ItemsResponse with studios matching the name.
+   * @param name Studio name (partial or full, case-insensitive)
+   * @param limit Number of studios to fetch (optional)
+   */
+  async getStudioByName(name: string, limit: number = 5): Promise<ItemsResponse> {
+    if (!this.userId) throw new Error("User not authenticated");
+    return this.makeRequest<ItemsResponse>(
+      "get",
+      `/Studios`,
+      undefined,
+      {
+        userId: this.userId,
+        limit,
+        recursive: true,
+        sortBy: "SortName",
+        searchTerm: name,
+      }
+    );
+  }
+
+  /**
+   * Get all movies for a given studio ID.
+   * @param studioId The studio's ID.
+   * @param limit Number of movies to fetch (default: 48)
+   * @param startIndex Pagination start index (default: 0)
+   */
+  async getItemsByStudioId(studioId: string, limit: number = 48, startIndex: number = 0): Promise<ItemsResponse> {
+    if (!this.userId) throw new Error("User not authenticated");
+    return this.makeRequest<ItemsResponse>(
+      "get",
+      `/Users/${this.userId}/Items`,
+      undefined,
+      {
+        StartIndex: startIndex,
+        Limit: limit,
+        Fields: "PrimaryImageAspectRatio,SortName,PrimaryImageAspectRatio",
+        Recursive: true,
+        SortBy: "IsFolder,SortName",
+        StudioIds: studioId,
+        SortOrder: "Ascending",
+        ImageTypeLimit: 1,
+        IncludeItemTypes: "Movie, Series",
+      }
+    );
+  }
+
+  /**
+   * Get all BoxSets (collections) for the current user.
+   * @returns ItemsResponse containing all BoxSets.
+   */
+  async getAllBoxSets(): Promise<ItemsResponse> {
+    if (!this.userId) throw new Error("User not authenticated");
+    return this.makeRequest<ItemsResponse>(
+      "get",
+      `/Users/${this.userId}/Items`,
+      undefined,
+      {
+        IncludeItemTypes: "BoxSet",
+        Recursive: true,
+        Fields: "PrimaryImageTag,SortName",
+        SortBy: "SortName",
+        SortOrder: "Ascending",
+      }
+    );
+  }
+
+  /**
+   * Find the first BoxSet (collection) that contains the given item.
+   * @param itemId The item ID.
+   * @returns The BoxSet MediaItem or null if not found.
+   */
+  async findBoxSetForItem(item: MediaItem): Promise<MediaItem | null> {
+    // 1. Get all BoxSets for the user
+    const boxSetsResp = await this.makeRequest<ItemsResponse>(
+      "get",
+      `/Users/${this.userId}/Items`,
+      undefined,
+      {
+        IncludeItemTypes: "BoxSet",
+        Recursive: true,
+        Fields: "PrimaryImageTag,SortName",
+        SortBy: "SortName",
+        SortOrder: "Ascending",
+      }
+    );
+    const boxSets = boxSetsResp.Items ?? [];
+
+
+    // Get the last word from the item's name (case-insensitive)
+    const itemNameWords = item.Name.trim().split(/\s+/);
+    // Ignore common words like 'the'
+    const ignoreWords = ["the", "captain"];
+    let firstWord = itemNameWords.find(
+      (word) =>
+      !ignoreWords.includes(word.toLowerCase()) &&
+      isNaN(Number(word))
+    ) || itemNameWords[0];
+    // Remove trailing colon if present
+    firstWord = firstWord.replace(/:$/, "");
+    const searchWord = firstWord.toLowerCase();
+    const boxSet = boxSets.find((boxSet) => {
+      // console.log(`Checking BoxSet: ${boxSet.Name} against search word: ${searchWord}`);
+      const boxSetNameWords = boxSet.Name.toLowerCase();
+     if(boxSetNameWords.includes(searchWord)) {
+        return true;
+      }
+    });
+
+    if (boxSet) {
+      return boxSet;
+    }
+
+    // 2. For each BoxSet, check if the item is a child
+    // for (const boxSet of boxSets) {
+    //   const childrenResp = await this.makeRequest<ItemsResponse>(
+    //     "get",
+    //     `/Users/${this.userId}/Items`,
+    //     undefined,
+    //     {
+    //       ParentId: boxSet.Id,
+    //       IncludeItemTypes: "Movie",
+    //       Recursive: false,
+    //       Fields: "PrimaryImageTag,SortName",
+    //     }
+    //   );
+    //   if ((childrenResp.Items ?? []).some((child) => child.Id === itemId)) {
+    //     return boxSet;
+    //   }
+    // }
+    return null;
+  }
+
+  /**
+   * Get all movies in a BoxSet (collection).
+   * @param boxSetId The BoxSet (collection) ID.
+   */
+  async getBoxSetMovies(boxSetId: string): Promise<MediaItem[]> {
+    const itemsResp = await this.makeRequest<ItemsResponse>(
+      "get",
+      `/Users/${this.userId}/Items`,
+      undefined,
+      {
+        ParentId: boxSetId,
+        IncludeItemTypes: "Movie",
+        Recursive: false,
+        Fields: "PrimaryImageTag,SortName",
+        SortBy: "SortName",
+        SortOrder: "Ascending",
+      }
+    );
+    return itemsResp.Items ?? [];
+  }
+
+  /**
+   * Upload a new user profile image.
+   * @param userId The user ID.
+   * @param file The image file (File or Blob).
+   * @returns Promise<void>
+   */
+  async uploadUserProfileImage(userId: string, file: File | Blob): Promise<void> {
+    const url = `${this.serverUrl}/emby/Users/${userId}/Images/Primary`;
+
+    // Compose the authorization header as in the working curl
+    const authorization = `MediaBrowser Client="Jellyfin Web", Device="Chrome", DeviceId="${this.deviceId}", Version="10.10.7", Token="${this.accessToken ?? ""}"`;
+
+    // Read the file as base64 and send as body
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Remove the data:*/*;base64, prefix if present
+        const result = reader.result as string;
+        const base64Data = result.split(',')[1] || result;
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    await axios.post(url, base64, {
+      headers: {
+        "accept": "*/*",
+        "authorization": authorization,
+        "content-type": file.type || "application/octet-stream",
+        "origin": window.location.origin,
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+        "user-agent": navigator.userAgent,
+      },
+      withCredentials: false,
+    });
+  }
+
+  /**
+   * Upload a subtitle file to the server for a video item.
+   * @param itemId The video item ID.
+   * @param file The subtitle file (File).
+   * @param language The language code (default: 'eng').
+   * @param isForced Whether the subtitle is forced (default: false).
+   * @param isHearingImpaired Whether the subtitle is for hearing impaired (default: false).
+   * @returns Promise<void>
+   */
+  async uploadSubtitleToServer(
+    itemId: string,
+    file: File,
+    language: string = "eng",
+    isForced: boolean = false,
+    isHearingImpaired: boolean = false
+  ): Promise<void> {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.split(",")[1] || result;
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const payload = {
+      Data: base64,
+      Format: file.name.endsWith(".srt") ? "srt" : "vtt",
+      IsForced: isForced,
+      IsHearingImpaired: isHearingImpaired,
+      Language: language,
+    };
+    await this.makeRequest(
+      "post",
+      `/Videos/${itemId}/Subtitles`,
+      payload
     );
   }
 }

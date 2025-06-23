@@ -269,14 +269,7 @@ const PlayerContainer: React.FC = () => {
             videoRef.current.currentTime = 0;
         }
 
-        const playbackUrl = api.getPlaybackUrl(
-            item.Id,
-            videoState.selectedAudioTrack,
-            videoState.subtitleTracks,
-            videoState.selectedSubtitleIndex,
-            supportDirectPlay,
-            undefined
-        )
+        const playbackUrl = api.getPlaybackUrl(item.Id, videoState.selectedAudioTrack, videoState.subtitleTracks, videoState.selectedSubtitleIndex, supportDirectPlay, undefined)
 
         const playSessionId = `${api["deviceId"]}-${Date.now()}`;
 

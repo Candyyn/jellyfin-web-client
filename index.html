@@ -9,13 +9,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="icon" href="/favicon.ico">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
-    <link rel="mask-icon" href="/mask-icon.svg" color="#dc2626">
-    <meta name="theme-color" content="#dc2626">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#171717" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Jellyfin" />
+    <link rel="apple-touch-icon" href="./logo.png">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Jellyfin - Your Personal Streaming Server" />
+    <meta property="og:description" content="Stream your personal collection of movies and shows from anywhere, securely." />
+    <meta property="og:image" content="https://i0.wp.com/silverscreenanalysis.com/wp-content/uploads/2015/06/50-guy-movies-collage.jpg?ssl=1" />
+    <meta property="og:url" content="https://jellyfin-web-client.web.app" />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Jellyfin - Your Personal Streaming Server" />
+    <meta name="twitter:description" content="Stream your personal collection of movies and shows from anywhere, securely." />
+    <meta name="twitter:image" content="https://i0.wp.com/silverscreenanalysis.com/wp-content/uploads/2015/06/50-guy-movies-collage.jpg?ssl=1" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    </script>
   </body>
 </html>

@@ -3,7 +3,7 @@ import Hls from "hls.js";
 import {
   ArrowLeft,
   ChevronsLeft,
-  ChevronsRight,
+  ChevronsRight, GalleryVerticalEnd,
   Maximize,
   Minimize,
   Pause,
@@ -24,6 +24,8 @@ import { useAuth } from "../context/AuthContext";
 import { useMediaItem } from "../hooks/useMediaData";
 import isDrawerOpen from "../states/atoms/DrawerOpen";
 import { MediaItem, MediaStream } from "../types/jellyfin";
+import SkipIntroButton from "../components/ui/skipIntroButton";
+import EpisodesList from "../components/ui/EpisodesList";
 
 interface VideoElementWithHls extends HTMLVideoElement {
   __hlsInstance?: Hls | null;
@@ -53,15 +55,34 @@ const MediaPlayerPage: React.FC = () => {
   const [subtitleTracks, setSubtitleTracks] = useState<MediaStream[]>([]);
   const [tracksMenuOpen, setTracksMenuOpen] = useState(false);
   const [localSubtitleUrl, setLocalSubtitleUrl] = useState<string | null>(null);
-  const [localSubtitleName, setLocalSubtitleName] = useState<string | null>(
-    null
-  );
+  const [localSubtitleName, setLocalSubtitleName] = useState<string | null>(null);
+  const [localSubtitleFile, setLocalSubtitleFile] = useState<File | null>(null); // new state
 
   const [bitrates, setBitrates] = useState<number | undefined>(undefined);
   const [selectedBitIndex, setSelectedBitIndex] = useState<number>(0);
 
 
   const [subtitleDelayMs, setSubtitleDelayMs] = useState(0);
+
+  // --- Add state for episodes menu visibility ---
+  const [showEpisodesMenu, setShowEpisodesMenu] = useState(false);
+  const episodesMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showEpisodesMenu) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        episodesMenuRef.current &&
+        !episodesMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowEpisodesMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEpisodesMenu]);
 
   // Audio tracks state
   const [audioTracks, setAudioTracks] = useState<
@@ -88,6 +109,75 @@ const MediaPlayerPage: React.FC = () => {
   );
   // Flag to force starting video from the beginning, e.g., for next/prev episode
   const [forceStartFromBeginning, setForceStartFromBeginning] = useState(false);
+
+  // --- Intro skip state ---
+  const [intro, setIntro] = useState<{ start: number; end: number } | null>(null);
+  const [hasSkippedIntro, setHasSkippedIntro] = useState(false);
+
+  // Helper: returns true if chapter name is an intro-like segment
+  function isIntroChapter(name: string | undefined): boolean {
+    const n = (name ?? "").toLowerCase();
+    return (
+      n.includes("disclaimer") ||
+      n.includes("intro") ||
+      n.includes("opening") ||
+      n.includes("title sequence") ||
+      n.includes("opening credits")
+    );
+  }
+
+  // Detect intro marker when item changes
+  useEffect(() => {
+    setHasSkippedIntro(false);
+    if (item?.Chapters && Array.isArray(item.Chapters)) {
+      // Find all intro-like chapters
+      const introChapters = item.Chapters
+        .map((ch, idx) => ({ ...ch, idx }))
+        .filter((ch) => isIntroChapter(ch.Name));
+      if (introChapters.length > 0) {
+        const firstIntro = introChapters[0];
+        const lastIntro = introChapters[introChapters.length - 1];
+        const start = Math.floor((firstIntro.StartPositionTicks ?? 0) / 10000000);
+
+        // Find the next non-intro chapter after the last intro
+        let end: number | undefined;
+        for (
+          let i = lastIntro.idx + 1;
+          i < item.Chapters.length;
+          ++i
+        ) {
+          const ch = item.Chapters[i];
+          if (!isIntroChapter(ch.Name) && typeof ch.StartPositionTicks === "number") {
+            end = Math.ceil(ch.StartPositionTicks / 10000000);
+            break;
+          }
+        }
+        if (!end) {
+          if (typeof item.RunTimeTicks === "number") {
+            end = Math.ceil(item.RunTimeTicks / 10000000);
+          } else {
+            end = start + 85;
+          }
+        }
+        setIntro({ start, end });
+        return;
+      }
+    }
+    setIntro(null);
+  }, [item]);
+
+  // Reset hasSkippedIntro if user seeks back before intro.start
+  useEffect(() => {
+    if (intro && hasSkippedIntro && currentTime < intro.start) {
+      setHasSkippedIntro(false);
+    }
+  }, [currentTime, intro, hasSkippedIntro]);
+
+  // Hide skip intro button after intro ends or after skipping
+  useEffect(() => {
+    if (!intro) return;
+    if (currentTime > intro.end && !hasSkippedIntro) setHasSkippedIntro(true);
+  }, [currentTime, intro, hasSkippedIntro]);
 
   // Helper functions for cookies
   function setCookie(name: string, value: string, days: number) {
@@ -157,6 +247,7 @@ const MediaPlayerPage: React.FC = () => {
     }
   }
 
+  // @ts-ignore
   function isSupportedCodecVideo() {
     const sources = item?.MediaStreams;
     const videoSrc = sources?.filter(x => x.Type == "Video");
@@ -391,7 +482,7 @@ const MediaPlayerPage: React.FC = () => {
   // Auto-hide controls
   useEffect(() => {
     const hideControls = () => {
-      if (isPlaying && !tracksMenuOpen) {
+      if (isPlaying && !tracksMenuOpen && !showEpisodesMenu) {
         setShowControls(false);
       }
     };
@@ -409,7 +500,7 @@ const MediaPlayerPage: React.FC = () => {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [showControls, isPlaying, tracksMenuOpen]);
+  }, [showControls, isPlaying, tracksMenuOpen, showEpisodesMenu]);
 
   // Handle fullscreen changes
   useEffect(() => {
@@ -486,6 +577,10 @@ const MediaPlayerPage: React.FC = () => {
       playerContainerRef.current.requestFullscreen();
     }
   }, [isFullscreen]);
+
+  const toggleEpsisodesMenu = () => {
+    setShowEpisodesMenu((prev) => !prev);
+  }
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -681,7 +776,19 @@ const MediaPlayerPage: React.FC = () => {
     const newUrl = URL.createObjectURL(file);
     setLocalSubtitleUrl(newUrl);
     setLocalSubtitleName(file.name);
-    handleSetSelectedSubtitleTrackUI("local"); // Use the main handler to set local as active
+    setLocalSubtitleFile(file); // store file
+    handleSetSelectedSubtitleTrackUI("local");
+  };
+
+  const handleUploadLocalSubtitle = async (file: File) => {
+    if (!api || !item) return;
+    try {
+      await api.uploadSubtitleToServer(item.Id, file, "eng", false, false);
+      getSubtitles();
+      alert("Subtitle uploaded successfully!");
+    } catch {
+      alert("Failed to upload subtitle");
+    }
   };
 
   const handleSetSelectedSubtitleTrackUI = (index: SubtitleIndex) => {
@@ -775,6 +882,19 @@ const MediaPlayerPage: React.FC = () => {
     }
   };
 
+  // Hide skip intro button after intro ends or after skipping
+  useEffect(() => {
+    if (!intro) return;
+    if (currentTime > intro.end) setHasSkippedIntro(true);
+  }, [currentTime, intro]);
+
+  // Handler for skip intro
+  const handleSkipIntro = () => {
+    if (!videoRef.current || !intro) return;
+    videoRef.current.currentTime = intro.end;
+    setHasSkippedIntro(true);
+  };
+
   if (isLoading || !item || !api) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
@@ -809,6 +929,22 @@ const MediaPlayerPage: React.FC = () => {
       >
         {/* Native track element removed, SubtitleTrack component will handle rendering */}
       </video>
+
+      {/* Skip Intro Button */}
+      {intro &&
+        !hasSkippedIntro &&
+        currentTime >= intro.start &&
+        currentTime < intro.end && (
+          <div className="absolute bottom-[6rem] right-8 z-50 pointer-events-none">
+            <div className="pointer-events-auto">
+              <SkipIntroButton
+                onClick={handleSkipIntro}
+                width={150}
+                height={50}
+              />
+            </div>
+          </div>
+        )}
 
       {/* SubtitleTrack now handles fetching and displaying the active subtitle from server or local file */}
       {(localSubtitleUrl || selectedSubtitleIndex !== null) && (
@@ -954,21 +1090,21 @@ const MediaPlayerPage: React.FC = () => {
                   <SkipForward size={22} />
                 </button>
               )}
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                 <button
                   onClick={toggleMute}
                   className="text-white hover:text-gray-300 transition-colors"
                 >
                   {(() => {
-                    let volumeIcon;
-                    if (isMuted) {
-                      volumeIcon = <VolumeX size={24} />;
-                    } else if (volume > 0.5) {
-                      volumeIcon = <Volume2 size={24} />;
-                    } else {
-                      volumeIcon = <Volume1 size={24} />;
-                    }
-                    return volumeIcon;
+                  let volumeIcon;
+                  if (isMuted) {
+                    volumeIcon = <VolumeX size={24} />;
+                  } else if (volume > 0.5) {
+                    volumeIcon = <Volume2 size={24} />;
+                  } else {
+                    volumeIcon = <Volume1 size={24} />;
+                  }
+                  return volumeIcon;
                   })()}
                 </button>
                 <input
@@ -976,20 +1112,26 @@ const MediaPlayerPage: React.FC = () => {
                   min="0"
                   max="1"
                   step="0.1"
-                  value={volume}
+                  value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
                   className="volume-slider w-20 h-1 bg-white/30 rounded-full appearance-none cursor-pointer"
                   style={{
-                    ...(typeof volume === "number"
-                      ? ({
-                          "--volume-progress": `${volume * 100}%`,
-                        } as React.CSSProperties)
-                      : {}),
+                  ...(typeof volume === "number"
+                    ? ({
+                      "--volume-progress": `${(isMuted ? 0 : volume) * 100}%`,
+                    } as React.CSSProperties)
+                    : {}),
                   }}
                 />
-              </div>
+                </div>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
+              <button
+                className="text-white hover:text-gray-300 transition-colors mr-2"
+                onClick={toggleEpsisodesMenu}
+              >
+                <GalleryVerticalEnd size={24} />
+              </button>
               <TracksMenu
                 audioTracks={audioTracks}
                 selectedAudioTrack={selectedAudioTrack}
@@ -998,7 +1140,9 @@ const MediaPlayerPage: React.FC = () => {
                 selectedSubtitleIndex={selectedSubtitleIndex}
                 setSelectedSubtitleIndex={handleSetSelectedSubtitleTrackUI}
                 onSelectLocalSubtitle={handleSelectLocalSubtitle}
+                onUploadLocalSubtitle={handleUploadLocalSubtitle} // new prop
                 localSubtitleName={localSubtitleName}
+                localSubtitleFile={localSubtitleFile} // new prop
                 subtitleDelayMs={subtitleDelayMs}
                 increaseSubtitleDelay={increaseSubtitleDelay}
                 decreaseSubtitleDelay={decreaseSubtitleDelay}
@@ -1017,6 +1161,20 @@ const MediaPlayerPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Episodes List button and overlay */}
+          {item.Type === "Episode" && item.SeriesId && item.SeasonId && (
+            <div className="mt-6">
+              {showEpisodesMenu && (
+                <div
+                  ref={episodesMenuRef}
+                  className="absolute right-0 bottom-[65px] w-[620px] max-h-[80vh] bg-neutral-900 text-white text-sm rounded overflow-y-auto shadow-lg p-2 z-50"
+                >
+                  <EpisodesList seriesId={item.SeriesId} initialSeasonId={item.SeasonId} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

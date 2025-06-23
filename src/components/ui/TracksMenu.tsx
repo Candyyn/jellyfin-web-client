@@ -1,7 +1,7 @@
 import clsx from "clsx";
-import {Settings, Check} from "lucide-react";
-import React, {useEffect, useRef} from "react";
-import {MediaStream} from "../../types/jellyfin";
+import { Settings, Check } from "lucide-react";
+import React, { useEffect, useRef } from "react";
+import { LANGUAGE_MAP, MediaStream } from "../../types/jellyfin";
 
 type AudioTrack = {
     id: number;
@@ -17,7 +17,9 @@ interface TracksMenuProps {
     selectedSubtitleIndex: number | string | null;
     setSelectedSubtitleIndex: (index: number | string | null) => void;
     onSelectLocalSubtitle: (file: File) => void;
+    onUploadLocalSubtitle?: (file: File) => void; // new prop
     localSubtitleName?: string | null;
+    localSubtitleFile?: File | null; // new prop
     subtitleDelayMs: number;
     increaseSubtitleDelay: () => void;
     decreaseSubtitleDelay: () => void;
@@ -30,26 +32,28 @@ interface TracksMenuProps {
 }
 
 const TracksMenu: React.FC<TracksMenuProps> = ({
-                                                   audioTracks,
-                                                   selectedAudioTrack,
-                                                   setSelectedAudioTrack,
-                                                   subtitleTracks,
-                                                   selectedSubtitleIndex,
-                                                   setSelectedSubtitleIndex,
-                                                   onSelectLocalSubtitle,
-                                                   localSubtitleName,
-                                                   subtitleDelayMs,
-                                                   increaseSubtitleDelay,
-                                                   decreaseSubtitleDelay,
-                                                   resetSubtitleDelay,
-                                                   isOpen,
-                                                   setIsOpen,
-                                                   maxRes,
-                                                   selectedRes,
-                                                   setResolution
-                                               }) => {
-    const menuRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  audioTracks,
+  selectedAudioTrack,
+  setSelectedAudioTrack,
+  subtitleTracks,
+  selectedSubtitleIndex,
+  setSelectedSubtitleIndex,
+  onSelectLocalSubtitle,
+  onUploadLocalSubtitle,
+  localSubtitleName,
+  localSubtitleFile,
+  subtitleDelayMs,
+  increaseSubtitleDelay,
+  decreaseSubtitleDelay,
+  resetSubtitleDelay,
+  isOpen,
+  setIsOpen,
+  maxRes,
+  selectedRes,
+  setResolution
+}) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
     const truncateName = (name: string, maxLength = 15) => {
         if (name.length <= maxLength) {
@@ -67,6 +71,13 @@ const TracksMenu: React.FC<TracksMenuProps> = ({
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [setIsOpen]);
+
+    // Helper to convert language code to full name
+    const getLanguageName = (code: string) => {
+        const map: Record<string, string> = LANGUAGE_MAP;
+        if(!code.length) return null;
+        return map[code?.toLowerCase()] || code;
+    };
 
     if (audioTracks.length <= 1 && subtitleTracks.length === 0) return null;
 
@@ -99,8 +110,6 @@ const TracksMenu: React.FC<TracksMenuProps> = ({
 // Example usage:
     const maxBitrate = 10_000_000; // 10 Mbps
     const available = getAvailableResolutions(maxBitrate, Number(maxRes)).reverse();
-
-    console.log("available", available);
 
     return (
         <div className="relative inline-block text-left" ref={menuRef}>
@@ -197,113 +206,128 @@ const TracksMenu: React.FC<TracksMenuProps> = ({
                         </div>
                     )}
 
-                    {/* Subtitle Tracks */}
-                    {/* This section should always be visible to allow uploading local subtitles and turning them off */}
-                    <div className="flex-1 min-w-[180px]">
-                        <h3 className="text-xs uppercase tracking-wide text-neutral-400 px-2 pb-2 border-b border-neutral-700">
-                            Subtitles
-                        </h3>
-                        <ul className="py-1 max-h-40 overflow-y-auto">
-                            <li>
-                                <input
-                                    type="file"
-                                    accept=".vtt,.srt"
-                                    ref={fileInputRef}
-                                    style={{display: "none"}}
-                                    onChange={(e) => {
-                                        if (e.target.files?.[0]) {
-                                            onSelectLocalSubtitle(e.target.files[0]);
-                                            setIsOpen(false);
-                                        }
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-full flex items-center justify-start px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left"
-                                >
-                                    Upload Local Subtitle
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setSelectedSubtitleIndex(null);
-                                        setIsOpen(false);
-                                    }}
-                                    className={clsx(
-                                        "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
-                                        selectedSubtitleIndex === null && "font-semibold"
-                                    )}
-                                    aria-pressed={selectedSubtitleIndex === null}
-                                >
-                                    <span>Off</span>
-                                    {selectedSubtitleIndex === null && <Check size={16}/>}
-                                </button>
-                            </li>
-                            {localSubtitleName && (
-                                <li key="local-subtitle-item">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedSubtitleIndex("local");
-                                            setIsOpen(false);
-                                        }}
-                                        className={clsx(
-                                            "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
-                                            selectedSubtitleIndex === "local" && "font-semibold"
-                                        )}
-                                        aria-pressed={selectedSubtitleIndex === "local"}
-                                    >
-                                        <span>{truncateName(localSubtitleName)} (Local)</span>
-                                        {selectedSubtitleIndex === "local" && <Check size={16}/>}
-                                    </button>
-                                </li>
-                            )}
-                            {subtitleTracks.map((track) => (
-
-                                <li key={track.Index}>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedSubtitleIndex(track.Index);
-                                            setIsOpen(false);
-                                        }}
-                                        className={clsx(
-                                            "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
-                                            selectedSubtitleIndex === track.Index && "font-semibold"
-                                        )}
-                                        aria-pressed={selectedSubtitleIndex === track.Index}
-                                    >
-                                        <span>{truncateName(track.DisplayTitle ?? `Subtitle ${track.Index}`)}</span>
-                                        {selectedSubtitleIndex === track.Index && (
-                                            <Check size={16}/>
-                                        )}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                        {/* Subtitle Offset Controls */}
-                        {selectedSubtitleIndex !== null && (
-                            <div className="mt-2 pt-2 border-t border-neutral-700">
-                                <h4 className="text-xs uppercase tracking-wide text-neutral-400 px-2 pb-1">
-                                    Subtitle Delay
-                                </h4>
-                                <div className="flex items-center justify-between px-3 py-1">
-                                    <button
-                                        type="button"
-                                        onClick={decreaseSubtitleDelay}
-                                        className="px-2 py-1 hover:bg-white/10 rounded"
-                                        aria-label="Decrease subtitle delay (subtitles appear earlier)"
-                                    >
-                                        -
-                                    </button>
-                                    <span
-                                        className="text-xs tabular-nums cursor-pointer"
-                                        onDoubleClick={resetSubtitleDelay}
-                                        title="Double-click to reset delay"
-                                    >
+          {/* Subtitle Tracks */}
+          {/* This section should always be visible to allow uploading local subtitles and turning them off */}
+          <div className="flex-1 min-w-[180px]">
+            <h3 className="text-xs uppercase tracking-wide text-neutral-400 px-2 pb-2 border-b border-neutral-700">
+              Subtitles
+              </h3>
+              <ul className="py-1 max-h-40 overflow-y-auto">
+                <li>
+                  <input
+                    type="file"
+                    accept=".vtt,.srt"
+                    ref={fileInputRef}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        onSelectLocalSubtitle(e.target.files[0]);
+                        setIsOpen(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full flex items-center justify-start px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left"
+                  >
+                    Upload Local Subtitle
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubtitleIndex(null);
+                      setIsOpen(false);
+                    }}
+                    className={clsx(
+                      "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
+                      selectedSubtitleIndex === null && "font-semibold"
+                    )}
+                    aria-pressed={selectedSubtitleIndex === null}
+                  >
+                    <span>Off</span>
+                    {selectedSubtitleIndex === null && <Check size={16} />}
+                  </button>
+                </li>
+                {localSubtitleName && (
+                  <li key="local-subtitle-item">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubtitleIndex("local");
+                        setIsOpen(false);
+                      }}
+                      className={clsx(
+                        "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
+                        selectedSubtitleIndex === "local" && "font-semibold"
+                      )}
+                      aria-pressed={selectedSubtitleIndex === "local"}
+                    >
+                      <span>{truncateName(localSubtitleName)} (Local)</span>
+                      {selectedSubtitleIndex === "local" && <Check size={16} />}
+                    </button>
+                    {onUploadLocalSubtitle && localSubtitleFile && (
+                      <button
+                        type="button"
+                        className="mt-1 ml-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
+                        onClick={() => onUploadLocalSubtitle(localSubtitleFile)}
+                      >
+                        Upload to Server
+                      </button>
+                    )}
+                  </li>
+                )}
+                {subtitleTracks.map((track) => (
+                  <li key={track.Index}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubtitleIndex(track.Index);
+                        setIsOpen(false);
+                      }}
+                      className={clsx(
+                        "w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/10 rounded text-left",
+                        selectedSubtitleIndex === track.Index && "font-semibold"
+                      )}
+                      aria-pressed={selectedSubtitleIndex === track.Index}
+                    >
+                      <span>
+                        {getLanguageName(track.Language ?? "") ??
+                          (track.Title
+                            ? `- ${truncateName(track.Title)}`
+                            : track.Index !== undefined
+                            ? `Subtitle ${track.Index}`
+                            : "")}
+                      </span>
+                      {selectedSubtitleIndex === track.Index && (
+                        <Check size={16} />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {/* Subtitle Offset Controls */}
+              {selectedSubtitleIndex !== null && (
+                <div className="mt-2 pt-2 border-t border-neutral-700">
+                  <h4 className="text-xs uppercase tracking-wide text-neutral-400 px-2 pb-1">
+                    Subtitle Delay
+                  </h4>
+                  <div className="flex items-center justify-between px-3 py-1">
+                    <button
+                      type="button"
+                      onClick={decreaseSubtitleDelay}
+                      className="px-2 py-1 hover:bg-white/10 rounded"
+                      aria-label="Decrease subtitle delay (subtitles appear earlier)"
+                    >
+                      -
+                    </button>
+                    <span
+                      className="text-xs tabular-nums cursor-pointer"
+                      onDoubleClick={resetSubtitleDelay}
+                      title="Double-click to reset delay"
+                    >
                       {subtitleDelayMs > 0 ? "+" : ""}
                                         {(subtitleDelayMs / 1000).toFixed(1)}s
                     </span>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Navbar from "../components/layout/Navbar";
 import HeroBanner from "../components/ui/HeroBanner";
 import MediaRow from "../components/ui/MediaRow";
+import StudiosSection from "../components/ui/StudiosSection";
 import { useMediaData } from "../hooks/useMediaData";
 import { MediaItem } from "../types/jellyfin";
 
@@ -46,55 +47,52 @@ const HomePage: React.FC = () => {
   }, [latestItems, moviesItems]);
 
   return (
-      <div className="min-h-screen bg-neutral-900 text-white">
-        <Navbar />
+    <div className="min-h-screen bg-neutral-900 text-white">
+      <Navbar />
 
-        {/* Hero Section */}
-        {featuredItems ? (
-          <HeroBanner items={featuredItems} />
-        ) : (
-          <div className="w-full h-[70vh] bg-neutral-800 animate-pulse"></div>
-        )}
+      {/* Hero Section */}
+      {featuredItems ? (
+        <HeroBanner items={featuredItems} />
+      ) : (
+        <div className="w-full h-[70vh] bg-neutral-800 animate-pulse"></div>
+      )}
 
-        {/* Content Rows */}
-        <div className="container mx-auto px-4 -mt-16 relative z-10 mt-[20px] sm:mt-[-4rem]">
-          <MediaRow
-            title="Continue Watching"
-            items={resumeItems}
-            isLoading={resumeLoading}
-          />
+      {/* Content Rows */}
+      <div className="container mx-auto px-4 mt-[20px] relative z-10 sm:mt-[-4rem] mb-16">
+        <MediaRow
+          title="Continue Watching"
+          items={resumeItems}
+          isLoading={resumeLoading}
+        />
 
-          <MediaRow
-            title="Next Up"
-            items={nextUpItems}
-            isLoading={nextUpLoading}
-          />
+        <MediaRow
+          title="Next Up"
+          items={nextUpItems}
+          isLoading={nextUpLoading}
+        />
 
-          <MediaRow
-            title="Latest Additions"
-            items={latestItems}
-            isLoading={latestLoading}
-          />
+        <MediaRow
+          title="Latest Additions"
+          items={latestItems}
+          isLoading={latestLoading}
+        />
 
-          {/* <MediaRow 
-          title="Recommended for You" 
-          items={recommendedItems} 
-          isLoading={recommendedLoading} 
-        /> */}
+        <MediaRow
+          title="Movies"
+          items={moviesItems}
+          isLoading={moviesLoading}
+        />
 
-          <MediaRow
-            title="Movies"
-            items={moviesItems}
-            isLoading={moviesLoading}
-          />
+        <MediaRow
+          title="TV Shows"
+          items={seriesItems}
+          isLoading={seriesLoading}
+        />
 
-          <MediaRow
-            title="TV Shows"
-            items={seriesItems}
-            isLoading={seriesLoading}
-          />
-        </div>
+        {/* Studios Section */}
+        <StudiosSection />
       </div>
+    </div>
   );
 };
 

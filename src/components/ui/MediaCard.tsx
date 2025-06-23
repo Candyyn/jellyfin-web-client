@@ -82,9 +82,12 @@ interface CardContentProps {
   title: string;
   navigate: ReturnType<typeof useNavigate>;
   onCardClick: React.Dispatch<React.SetStateAction<string>>;
+  // Add these for BoxSet support
+  isBoxSet?: boolean;
+  boxSetFirstMovieId?: string;
 }
 
-const CardContent: React.FC<CardContentProps> = ({
+const CardContent: React.FC<CardContentProps & { touchDevice?: boolean }> = ({
   item,
   isEpisode,
   isMovie,
@@ -98,6 +101,9 @@ const CardContent: React.FC<CardContentProps> = ({
   nextUoId,
   navigate,
   onCardClick,
+  isBoxSet,
+  boxSetFirstMovieId,
+  touchDevice,
 }) => {
   const location = useLocation();
 
@@ -122,53 +128,65 @@ const CardContent: React.FC<CardContentProps> = ({
     titleContent = title;
   }
 
-  const playbackId = isSeries ? nextUoId : item.Id;
+  // Use first movie in BoxSet if present
+  let playbackId: string | undefined;
+  if (isBoxSet && boxSetFirstMovieId) {
+    playbackId = boxSetFirstMovieId;
+  } else if (isSeries) {
+    playbackId = nextUoId;
+  } else {
+    playbackId = item.Id;
+  }
 
   return (
     <>
       <h3 className="text-white font-medium truncate">{titleContent}</h3>
-      <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
-        {year && <span>{year}</span>}
-        {rating && (
-          <span className="border border-gray-500 px-1">{rating}</span>
-        )}
-        {(isMovie || isEpisode) && item.RunTimeTicks && (
-          <span className="bg-gray-800 px-1 rounded text-[10px] uppercase tracking-wide">
-            {Math.floor(item.RunTimeTicks / 600000000)} min
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 mt-3">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const firstSegment = location.pathname.split("/")[1];
-            navigate(`/play/${playbackId}`, {
-              state: { callbackPath: `/${firstSegment}` },
-            });
-          }}
-          className="flex items-center justify-center bg-white text-black rounded-full w-8 h-8 hover:bg-red-600 hover:text-white transition-colors"
-          tabIndex={-1}
-          aria-label={`Play ${title}`}
-        >
-          <Play size={16} className="ml-0.5" />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onCardClick(item.Id);
-          }}
-          className="flex items-center justify-center bg-gray-700 text-white rounded-full w-8 h-8 hover:bg-white hover:text-black transition-colors"
-          tabIndex={-1}
-          aria-label={`More info about ${title}`}
-        >
-          <Info size={16} />
-        </button>
-      </div>
+      {!touchDevice && (
+        <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
+          {year && <span>{year}</span>}
+          {rating && (
+            <span className="border border-gray-500 px-1">{rating}</span>
+          )}
+          {(isMovie || isEpisode) && item.RunTimeTicks && (
+            <span className="bg-gray-800 px-1 rounded text-[10px] uppercase tracking-wide">
+              {Math.floor(item.RunTimeTicks / 600000000)} min
+            </span>
+          )}
+        </div>
+      )}
+      {!touchDevice && (
+        <div className="flex items-center gap-2 mt-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const firstSegment = location.pathname.split("/")[1];
+              navigate(`/play/${playbackId}`, {
+                state: { callbackPath: `/${firstSegment}` },
+              });
+            }}
+            className="flex items-center justify-center bg-white text-black rounded-full w-8 h-8 hover:bg-red-600 hover:text-white transition-colors"
+            tabIndex={-1}
+            aria-label={`Play ${title}`}
+          >
+            <Play size={16} className="ml-0.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCardClick(item.Id);
+            }}
+            className="flex items-center justify-center bg-gray-700 text-white rounded-full w-8 h-8 hover:bg-white hover:text-black transition-colors"
+            tabIndex={-1}
+            aria-label={`More info about ${title}`}
+          >
+            <Info size={16} />
+          </button>
+        </div>
+      )}
     </>
   );
 };
@@ -177,8 +195,15 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, featured = false }) => {
   const { api } = useAuth();
   const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
-  const [targetId, setTargetId] = useState<string>(item.Id);
+  // Track if device is touch
+  const [touchDevice, setTouchDevice] = useState(false);
 
+  const [targetId, setTargetId] = useState<string>(item.Id);
+  // BoxSet state
+  const [boxSetFirstMovieId, setBoxSetFirstMovieId] = useState<
+    string | undefined
+  >(undefined);
+  const isBoxSet = item.Type === "BoxSet";
   const isEpisode = item.Type === "Episode";
   const isMovie = item.Type === "Movie";
   const isSeries = item.Type === "Series";
@@ -216,10 +241,39 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, featured = false }) => {
     resolveTargetId();
   }, [isSeries, api, item]);
 
+  // Fetch first movie in BoxSet if item is a BoxSet
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchBoxSetFirstMovie() {
+      if (!api || !isBoxSet) {
+        setBoxSetFirstMovieId(undefined);
+        return;
+      }
+      try {
+        const movies = await api.getBoxSetMovies(item.Id);
+        if (!cancelled && movies && movies.length > 0) {
+          setBoxSetFirstMovieId(movies[0].Id);
+        } else if (!cancelled) {
+          setBoxSetFirstMovieId(undefined);
+        }
+      } catch {
+        if (!cancelled) setBoxSetFirstMovieId(undefined);
+      }
+    }
+    fetchBoxSetFirstMovie();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isBoxSet, item]);
+
   const handleCardClick = (id: string) => {
     setActiveTiemId(id);
     setIsDrawerOpen(true);
   };
+
+  useEffect(() => {
+    setTouchDevice(isTouchDevice());
+  }, []);
 
   return (
     <div
@@ -228,8 +282,12 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, featured = false }) => {
         featured ? "w-full aspect-[16/9]" : "w-full aspect-[2/3]",
         isHovered && "z-10 scale-110 shadow-xl"
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => {
+        if (!touchDevice) setIsHovered(true);
+      }}
+      onMouseLeave={() => {
+        if (!touchDevice) setIsHovered(false);
+      }}
       tabIndex={0}
       aria-label={`View details for ${title}`}
       style={{ display: "block" }}
@@ -264,7 +322,10 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, featured = false }) => {
         className={clsx(
           "absolute inset-0 flex flex-col justify-end p-3 text-start",
           "bg-gradient-to-t from-black/90 to-transparent",
-          "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          // Always show overlay on touch devices, else on hover
+          touchDevice
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         )}
       >
         <CardContent
@@ -281,10 +342,22 @@ const MediaCard: React.FC<MediaCardProps> = ({ item, featured = false }) => {
           title={title}
           navigate={navigate}
           onCardClick={() => handleCardClick(item.Id)}
+          isBoxSet={isBoxSet}
+          boxSetFirstMovieId={boxSetFirstMovieId}
+          touchDevice={touchDevice}
         />
       </div>
     </div>
   );
 };
+
+// Utility to detect touch devices
+function isTouchDevice() {
+  return (
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window ||
+      navigator.maxTouchPoints > 0)
+  );
+}
 
 export default MediaCard;
